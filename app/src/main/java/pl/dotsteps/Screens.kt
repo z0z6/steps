@@ -1,5 +1,6 @@
 package pl.dotsteps
 
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -57,6 +58,8 @@ private fun shapeOf() = if (LocalPal.current.round) RoundedCornerShape(22.dp) el
 @Composable
 fun MainScreen() {
     var tab by remember { mutableIntStateOf(0) }
+    var calib by remember { mutableStateOf(false) }
+    BackHandler(enabled = calib) { calib = false }
     LaunchedEffect(Unit) {
         while (true) {
             StepStore.refresh()   // przejście przez północ
@@ -66,14 +69,18 @@ fun MainScreen() {
     Column(Modifier.fillMaxSize()) {
         Header()
         Box(Modifier.weight(1f).fillMaxWidth()) {
-            when (tab) {
-                0 -> TodayScreen()
-                1 -> WeekScreen()
-                2 -> StatsScreen()
-                else -> SettingsScreen()
+            if (calib) {
+                CalibrationScreen { calib = false }
+            } else {
+                when (tab) {
+                    0 -> TodayScreen()
+                    1 -> WeekScreen()
+                    2 -> StatsScreen()
+                    else -> SettingsScreen { calib = true }
+                }
             }
         }
-        NavBar(tab) { tab = it }
+        NavBar(tab) { tab = it; calib = false }
     }
 }
 
@@ -119,7 +126,7 @@ private fun NavBar(selected: Int, onSelect: (Int) -> Unit) {
 }
 
 @Composable
-private fun ToggleBox(label: String, selected: Boolean, modifier: Modifier, onClick: () -> Unit) {
+fun ToggleBox(label: String, selected: Boolean, modifier: Modifier, onClick: () -> Unit) {
     val p = LocalPal.current
     val shape = if (p.round) RoundedCornerShape(26.dp) else RectangleShape
     Box(
@@ -328,7 +335,7 @@ fun StatsScreen() {
 // ================================================================ OPCJE
 
 @Composable
-fun SettingsScreen() {
+fun SettingsScreen(onCalibrate: () -> Unit) {
     val p = LocalPal.current
     val ctx = LocalContext.current
     val s by StepStore.settings.collectAsState()
@@ -369,6 +376,48 @@ fun SettingsScreen() {
         verticalArrangement = Arrangement.spacedBy(18.dp),
     ) {
         Spacer(Modifier.height(2.dp))
+
+        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            DotText("ZRODLO KROKOW", 2f, color = p.sub)
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Calibration.NAMES.forEachIndexed { i, name ->
+                    ToggleBox(name, s.source == i, Modifier.weight(1f).height(52.dp)) {
+                        StepStore.update(s.copy(source = i))
+                    }
+                }
+            }
+            BasicText(
+                when (s.source) {
+                    0 -> "Surowy licznik sprzętowy. Najmniej baterii, ale liczy też fałszywe kroki."
+                    1 -> "Czujnik kroków + filtr rytmu: krok liczy się dopiero po K równych krokach z rzędu. " +
+                        "Odrzuca potrząsanie i wstrząsy, oszczędza baterię."
+                    else -> "Własny algorytm na akcelerometrze + filtr rytmu. Dokładny po kalibracji, " +
+                        "ale utrzymuje CPU w gotowości, więc zużywa wyraźnie więcej baterii."
+                },
+                style = TextStyle(color = p.sub, fontSize = 12.sp, lineHeight = 18.sp, fontFamily = FontFamily.Monospace),
+            )
+        }
+
+        Stepper("KROKI DO POTWIERDZENIA", s.rhythmK.toString(),
+            { StepStore.update(s.copy(rhythmK = (s.rhythmK - 1).coerceAtLeast(2))) },
+            { StepStore.update(s.copy(rhythmK = (s.rhythmK + 1).coerceAtMost(10))) })
+
+        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            ToggleBox("KALIBRACJA", true, Modifier.fillMaxWidth().height(56.dp), onCalibrate)
+            BasicText(
+                "Skale S/F/W: ${String.format(Locale.US, "%.2f / %.2f / %.2f", s.scales[0], s.scales[1], s.scales[2])}" +
+                    "  próg: ${String.format(Locale.US, "%.1f", s.threshold)}  odstęp: ${s.minIntervalMs} ms" +
+                    "  kalibracji: ${s.calibRuns}",
+                style = TextStyle(color = p.sub, fontSize = 12.sp, lineHeight = 18.sp, fontFamily = FontFamily.Monospace),
+            )
+            if (s.calibRuns > 0) {
+                ToggleBox("RESET KALIBRACJI", false, Modifier.fillMaxWidth().height(48.dp)) {
+                    StepStore.update(
+                        s.copy(scales = listOf(1f, 1f, 1f), threshold = 1.2f, minIntervalMs = 300, calibRuns = 0)
+                    )
+                }
+            }
+        }
 
         Stepper("CEL DZIENNY", s.goal.toString(),
             { StepStore.update(s.copy(goal = (s.goal - 500).coerceAtLeast(500))) },

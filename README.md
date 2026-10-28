@@ -16,3 +16,7 @@ E-INK, E-INK NOC, NOTHING, SIGNAL, AMBER (Opcje → Motyw).
 ## Statystyki i dane
 Zakładka STATY: 7 dni / 30 dni / rok, suma, średnia, rekord, seria dni z celem, km, kcal, sumy od początku.
 Opcje → Dane: eksport i import historii do CSV (`date,steps,km,kcal`).
+
+## Liczenie kroków i kalibracja
+Trzy źródła: SPRZET (surowy licznik), FILTR (czujnik kroków + filtr rytmu, domyślne), WLASNY (akcelerometr + filtr rytmu).
+Opcje -> Kalibracja: nagrywa spacer, porównuje metody z prawdziwą liczbą kroków i dobiera skale/progi.

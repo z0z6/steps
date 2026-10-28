@@ -16,18 +16,29 @@ import android.os.Build
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
+import android.os.PowerManager
 import android.os.Process
 import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
 import androidx.core.content.ContextCompat
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.launch
 
 class StepService : Service(), SensorEventListener2 {
 
     private var lastShown = -1
     private var sm: SensorManager? = null
+    private var wakeLock: PowerManager.WakeLock? = null
     private var quitting = false
     private var finished = false
     private val handler = Handler(Looper.getMainLooper())
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
 
     override fun onCreate() {
         super.onCreate()
@@ -45,14 +56,53 @@ class StepService : Service(), SensorEventListener2 {
             else ServiceInfo.FOREGROUND_SERVICE_TYPE_MANIFEST
         )
 
-        val manager = getSystemService(Context.SENSOR_SERVICE) as SensorManager
-        val sensor = manager.getDefaultSensor(Sensor.TYPE_STEP_COUNTER)
-        if (sensor == null) {
+        sm = getSystemService(Context.SENSOR_SERVICE) as SensorManager
+        if (!registerForSource()) {
             stopSelf()
             return
         }
-        sm = manager
-        manager.registerListener(this, sensor, SensorManager.SENSOR_DELAY_NORMAL, 30_000_000)
+        // przełączenie źródła w ustawieniach działa od razu, bez restartu usługi
+        scope.launch {
+            StepStore.settings.map { it.source }.distinctUntilChanged().drop(1).collect {
+                registerForSource()
+            }
+        }
+    }
+
+    /** Rejestruje czujnik zgodnie z wybranym źródłem (z awaryjnym wyborem, gdy go brak). */
+    private fun registerForSource(): Boolean {
+        val manager = sm ?: return false
+        manager.unregisterListener(this)
+        releaseWakeLock()
+
+        val counter = manager.getDefaultSensor(Sensor.TYPE_STEP_COUNTER)
+        val detector = manager.getDefaultSensor(Sensor.TYPE_STEP_DETECTOR)
+        val accel = manager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
+
+        var src = StepStore.settings.value.source
+        if (src == 1 && detector == null) src = 0
+        if (src == 2 && accel == null) src = 0
+        if (src == 0 && counter == null) src = if (detector != null) 1 else if (accel != null) 2 else -1
+        if (src < 0) return false
+
+        StepStore.noteSource(src)
+        StepEngine.reset()
+        when (src) {
+            0 -> manager.registerListener(this, counter, SensorManager.SENSOR_DELAY_NORMAL, 30_000_000)
+            1 -> manager.registerListener(this, detector, SensorManager.SENSOR_DELAY_NORMAL, 30_000_000)
+            else -> {
+                // akcelerometr przy wygaszonym ekranie wymaga, by CPU nie zasypiało
+                val pm = getSystemService(Context.POWER_SERVICE) as PowerManager
+                wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "dotsteps:accel").also { it.acquire() }
+                manager.registerListener(this, accel, 20_000)
+            }
+        }
+        return true
+    }
+
+    private fun releaseWakeLock() {
+        try { wakeLock?.takeIf { it.isHeld }?.release() } catch (_: Exception) { }
+        wakeLock = null
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -67,7 +117,9 @@ class StepService : Service(), SensorEventListener2 {
 
     override fun onDestroy() {
         running = false
+        scope.cancel()
         sm?.unregisterListener(this)
+        releaseWakeLock()
         super.onDestroy()
     }
 
@@ -81,7 +133,7 @@ class StepService : Service(), SensorEventListener2 {
             finishQuit()
             return
         }
-        handler.postDelayed({ finishQuit() }, 1500) // zabezpieczenie, gdyby flush nie wrócił
+        handler.postDelayed({ finishQuit() }, 1500)
         val ok = try { m.flush(this) } catch (_: Exception) { false }
         if (!ok) finishQuit()
     }
@@ -90,18 +142,26 @@ class StepService : Service(), SensorEventListener2 {
         if (finished) return
         finished = true
         handler.removeCallbacksAndMessages(null)
+        scope.cancel()
         sm?.unregisterListener(this)
+        releaseWakeLock()
+        StepStore.sync()
         stopForeground(STOP_FOREGROUND_REMOVE)
         stopSelf()
         Process.killProcess(Process.myPid())
     }
 
     override fun onFlushCompleted(sensor: Sensor?) {
-        if (quitting) finishQuit()   // wszystkie zbuforowane zdarzenia już zapisane w onSensorChanged
+        if (quitting) finishQuit()
     }
 
     override fun onSensorChanged(e: SensorEvent) {
-        StepStore.onCounter(e.values[0].toLong())
+        when (e.sensor.type) {
+            Sensor.TYPE_STEP_COUNTER -> StepEngine.onCounter(e.values[0].toLong(), e.timestamp)
+            Sensor.TYPE_STEP_DETECTOR -> StepEngine.onDetectorStep(e.timestamp)
+            Sensor.TYPE_ACCELEROMETER ->
+                StepEngine.onAccel(e.timestamp, e.values[0], e.values[1], e.values[2])
+        }
         if (quitting) return
         val n = StepStore.todaySteps()
         if (n != lastShown) {
