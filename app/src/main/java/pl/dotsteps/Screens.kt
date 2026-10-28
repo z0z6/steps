@@ -28,6 +28,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
@@ -72,8 +73,9 @@ fun MainScreen() {
 @Composable
 private fun Header() {
     val p = LocalPal.current
+    val ctx = LocalContext.current
     Row(
-        Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 14.dp),
+        Modifier.fillMaxWidth().padding(start = 20.dp, end = 12.dp, top = 8.dp, bottom = 8.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -82,7 +84,17 @@ private fun Header() {
             Spacer(Modifier.size(10.dp))
             DotText("DOT STEPS", 2.6f)
         }
-        DotText(LocalDate.now().format(DateTimeFormatter.ofPattern("dd.MM")), 2.6f, color = p.sub)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            DotText(LocalDate.now().format(DateTimeFormatter.ofPattern("dd.MM")), 2.6f, color = p.sub)
+            Spacer(Modifier.size(14.dp))
+            // zapisz wynik i ubij wszystko (usługa + proces)
+            Box(
+                Modifier.size(48.dp)
+                    .background(p.accent, if (p.round) CircleShape else RectangleShape)
+                    .tap { Shutdown.quit(ctx) },
+                contentAlignment = Alignment.Center,
+            ) { DotText("X", 2.6f, color = if (p.round) p.fg else p.bg) }
+        }
     }
 }
 

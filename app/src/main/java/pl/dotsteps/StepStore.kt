@@ -65,8 +65,15 @@ object StepStore {
             val key = "d_${LocalDate.now()}"
             ed.putInt(key, prefs.getInt(key, 0) + delta.toInt())
         }
-        ed.apply()
+        ed.commit() // synchronicznie – proces może zostać zabity zaraz po zapisie
         refresh()
+    }
+
+    /** Użytkownik świadomie zakończył aplikację – nie wznawiaj usługi po restarcie telefonu. */
+    fun isStopped(): Boolean = prefs.getBoolean("stopped", false)
+
+    fun setStopped(v: Boolean) {
+        prefs.edit().putBoolean("stopped", v).commit()
     }
 
     @Synchronized

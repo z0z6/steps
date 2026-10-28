@@ -27,6 +27,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         StepStore.init(this)
+        StepStore.setStopped(false)
         setContent { Root() }
     }
 }
