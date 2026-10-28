@@ -54,12 +54,36 @@ val AmberPal = Pal(
     round = true, light = false,
 )
 
+/** Zielony fosfor na czerni, styl terminala. */
+val TerminalPal = Pal(
+    bg = Color(0xFF000000), fg = Color(0xFF33FF66), sub = Color(0xFF1FA043),
+    dim = Color(0xFF0F3A1B), accent = Color(0xFFB8FF3C), onAccent = Color(0xFF000000),
+    round = false, light = false,
+)
+
+/** Granat i cyjan z różowym akcentem. */
+val LagunaPal = Pal(
+    bg = Color(0xFF050B1A), fg = Color(0xFF7FE7FF), sub = Color(0xFF4A8CA8),
+    dim = Color(0xFF14263D), accent = Color(0xFFFF3D81), onAccent = Color(0xFF050B1A),
+    round = true, light = false,
+)
+
+/** Ciepły piasek, brąz i paląca pomarańcza – jasny, papierowy. */
+val SandPal = Pal(
+    bg = Color(0xFFE9DFC8), fg = Color(0xFF2B2118), sub = Color(0xFF6B5A44),
+    dim = Color(0xFFC9BA9A), accent = Color(0xFFC2410C), onAccent = Color(0xFFFFFFFF),
+    round = false, light = true,
+)
+
 val THEMES: List<Pair<String, Pal>> = listOf(
     "E-INK" to EInkPal,
     "E-INK NOC" to EInkNightPal,
     "NOTHING" to NothingPal,
     "SIGNAL" to SignalPal,
     "AMBER" to AmberPal,
+    "TERMINAL" to TerminalPal,
+    "LAGUNA" to LagunaPal,
+    "PIASEK" to SandPal,
 )
 
 val LocalPal = staticCompositionLocalOf { EInkPal }
