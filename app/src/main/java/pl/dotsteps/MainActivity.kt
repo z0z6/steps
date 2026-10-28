@@ -36,12 +36,12 @@ class MainActivity : ComponentActivity() {
 private fun Root() {
     val ctx = LocalContext.current
     val settings by StepStore.settings.collectAsState()
-    val pal = if (settings.eink) EInkPal else NothingPal
+    val pal = THEMES.getOrElse(settings.theme) { THEMES[0] }.second
 
-    DisposableEffect(settings.eink) {
+    DisposableEffect(pal.light) {
         val act = ctx as ComponentActivity
         val t = android.graphics.Color.TRANSPARENT
-        val style = if (settings.eink) SystemBarStyle.light(t, t) else SystemBarStyle.dark(t)
+        val style = if (pal.light) SystemBarStyle.light(t, t) else SystemBarStyle.dark(t)
         act.enableEdgeToEdge(statusBarStyle = style, navigationBarStyle = style)
         onDispose { }
     }

@@ -9,3 +9,10 @@ Licznik kroków na Androida (Kotlin + Jetpack Compose), styl matrycy kropek à l
 
 ## Lokalnie
 `gradle assembleRelease` (Gradle 8.9, JDK 17, Android SDK 35).
+
+## Motywy
+E-INK, E-INK NOC, NOTHING, SIGNAL, AMBER (Opcje → Motyw).
+
+## Statystyki i dane
+Zakładka STATY: 7 dni / 30 dni / rok, suma, średnia, rekord, seria dni z celem, km, kcal, sumy od początku.
+Opcje → Dane: eksport i import historii do CSV (`date,steps,km,kcal`).
